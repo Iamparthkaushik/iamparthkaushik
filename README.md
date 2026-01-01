@@ -4,9 +4,9 @@
 
 ### Software Engineer
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/iamparthkaushik)
+
 [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/iamparthkaushik)
-[![Portfolio](https://img.shields.io/badge/Portfolio-FF3D77?style=for-the-badge&logo=framer&logoColor=white)](https://iamparthkaushik.vercel.app)
+[![Portfolio](https://img.shields.io/badge/Portfolio-FF3D77?style=for-the-badge&logo=framer&logoColor=white)](https://parthkaushik.vercel.app)
 
 </div>
 
@@ -18,7 +18,7 @@ I'm **Parth Kaushik**, a passionate software engineer based in India. I speciali
 
 ### 🛠 Tech Stack
 
-- **Languages**: JavaScript, TypeScript, Python
+- **Languages**: JavaScript, TypeScript, Python, C++
 - **Frontend**: React, Next.js, Tailwind CSS, Vanilla CSS
 - **Backend**: Node.js, Express, PostgreSQL
 - **Tools**: Git, Docker, VS Code
