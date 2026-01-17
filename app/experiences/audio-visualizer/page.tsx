@@ -13,133 +13,148 @@ export default function AudioVisualizerPage() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [visualStyle, setVisualStyle] = useState<'bars' | 'circle' | 'wave' | 'particles'>('circle');
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
-  
-  const initAudio = useCallback(async () => {
-    if (audioContextRef.current) return;
-    
+  const [isMicActive, setIsMicActive] = useState(false);
+
+  const toggleMicrophone = async () => {
+    if (isMicActive) {
+      // Turn off mic
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+      setIsMicActive(false);
+      return;
+    }
+
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 512;
-      
-      // Create oscillator for demo since we don't have an audio file
-      const oscillator = audioContextRef.current.createOscillator();
-      const gainNode = audioContextRef.current.createGain();
-      
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 0;
-      gainNode.gain.value = 0;
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(analyserRef.current);
-      analyserRef.current.connect(audioContextRef.current.destination);
-      
-      oscillator.start();
-      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 512;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyserRef.current!);
+      sourceRef.current = source as unknown as MediaElementAudioSourceNode; // Type assertion since MediaStreamSource is compatible for disconnect
+
+      setIsMicActive(true);
       setHasUserInteracted(true);
+
+      // Resume context if suspended
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
     } catch (error) {
-      console.error('Audio init error:', error);
+      console.error('Error accessing microphone:', error);
+      alert('Could not access microphone. Please check permissions.');
     }
+  };
+
+  const initAudio = useCallback(async () => {
+    // We can keep the oscillator demo as a fallback or "default" state until Mic is active
+    // For now, let's leave valid "dummy" data generation if mic is NOT active in the animate loop
+    if (audioContextRef.current) return;
   }, []);
-  
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
-    
+
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-    
+
     // Demo visualization with simulated audio data
     let phase = 0;
-    
+
     const animate = () => {
       ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
+
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-      
+
       // Generate simulated frequency data
       const bufferLength = 128;
       const dataArray = new Uint8Array(bufferLength);
-      
-      if (analyserRef.current && hasUserInteracted) {
+
+      if (analyserRef.current && (isMicActive || hasUserInteracted)) {
         analyserRef.current.getByteFrequencyData(dataArray);
       } else {
-        // Simulated data for demo
+        // Simulated data for demo (fallback)
         for (let i = 0; i < bufferLength; i++) {
-          dataArray[i] = Math.sin(phase + i * 0.1) * 50 + 
-                        Math.sin(phase * 2 + i * 0.05) * 30 +
-                        Math.sin(phase * 0.5 + i * 0.2) * 40 + 128;
+          dataArray[i] = Math.sin(phase + i * 0.1) * 50 +
+            Math.sin(phase * 2 + i * 0.05) * 30 +
+            Math.sin(phase * 0.5 + i * 0.2) * 40 + 128;
         }
       }
-      
+
       phase += 0.05;
-      
+
       if (visualStyle === 'bars') {
         const barWidth = canvas.width / bufferLength;
-        
+
         for (let i = 0; i < bufferLength; i++) {
           const barHeight = (dataArray[i] / 255) * canvas.height * 0.8;
           const colorIndex = Math.floor((i / bufferLength) * COLORS.length);
-          
+
           ctx.save();
           ctx.shadowColor = COLORS[colorIndex % COLORS.length];
           ctx.shadowBlur = 20;
-          
+
           const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
           gradient.addColorStop(0, COLORS[colorIndex % COLORS.length]);
           gradient.addColorStop(1, `${COLORS[colorIndex % COLORS.length]}33`);
-          
+
           ctx.fillStyle = gradient;
           ctx.fillRect(i * barWidth, canvas.height - barHeight, barWidth - 2, barHeight);
           ctx.restore();
         }
       } else if (visualStyle === 'circle') {
         const radius = Math.min(canvas.width, canvas.height) * 0.25;
-        
+
         for (let i = 0; i < bufferLength; i++) {
           const angle = (i / bufferLength) * Math.PI * 2 - Math.PI / 2;
           const barHeight = (dataArray[i] / 255) * radius;
-          
+
           const x1 = centerX + Math.cos(angle) * radius;
           const y1 = centerY + Math.sin(angle) * radius;
           const x2 = centerX + Math.cos(angle) * (radius + barHeight);
           const y2 = centerY + Math.sin(angle) * (radius + barHeight);
-          
+
           const colorIndex = Math.floor((i / bufferLength) * COLORS.length);
-          
+
           ctx.save();
           ctx.shadowColor = COLORS[colorIndex % COLORS.length];
           ctx.shadowBlur = 15;
           ctx.strokeStyle = COLORS[colorIndex % COLORS.length];
           ctx.lineWidth = 3;
           ctx.lineCap = 'round';
-          
+
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
           ctx.stroke();
           ctx.restore();
         }
-        
+
         // Inner circle
         const avgData = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
         const innerRadius = radius * 0.7 + (avgData / 255) * 20;
-        
+
         ctx.save();
         ctx.shadowColor = '#fff';
         ctx.shadowBlur = 30;
@@ -152,23 +167,23 @@ export default function AudioVisualizerPage() {
       } else if (visualStyle === 'wave') {
         ctx.beginPath();
         ctx.moveTo(0, centerY);
-        
+
         for (let i = 0; i < bufferLength; i++) {
           const x = (i / bufferLength) * canvas.width;
           const y = centerY + ((dataArray[i] - 128) / 128) * canvas.height * 0.4;
-          
+
           if (i === 0) {
             ctx.moveTo(x, y);
           } else {
             ctx.lineTo(x, y);
           }
         }
-        
+
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
         COLORS.forEach((color, i) => {
           gradient.addColorStop(i / (COLORS.length - 1), color);
         });
-        
+
         ctx.save();
         ctx.shadowColor = '#a8e6cf';
         ctx.shadowBlur = 20;
@@ -178,13 +193,13 @@ export default function AudioVisualizerPage() {
         ctx.lineJoin = 'round';
         ctx.stroke();
         ctx.restore();
-        
+
         // Mirror wave
         ctx.beginPath();
         for (let i = 0; i < bufferLength; i++) {
           const x = (i / bufferLength) * canvas.width;
           const y = centerY - ((dataArray[i] - 128) / 128) * canvas.height * 0.3;
-          
+
           if (i === 0) {
             ctx.moveTo(x, y);
           } else {
@@ -198,13 +213,13 @@ export default function AudioVisualizerPage() {
         for (let i = 0; i < bufferLength; i += 2) {
           const angle = (i / bufferLength) * Math.PI * 2;
           const radius = (dataArray[i] / 255) * Math.min(canvas.width, canvas.height) * 0.4;
-          
+
           const x = centerX + Math.cos(angle + phase * 0.5) * radius;
           const y = centerY + Math.sin(angle + phase * 0.5) * radius;
           const size = (dataArray[i] / 255) * 15 + 3;
-          
+
           const colorIndex = Math.floor((i / bufferLength) * COLORS.length);
-          
+
           ctx.save();
           ctx.shadowColor = COLORS[colorIndex % COLORS.length];
           ctx.shadowBlur = 25;
@@ -213,7 +228,7 @@ export default function AudioVisualizerPage() {
           ctx.arc(x, y, size, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-          
+
           // Connect to center
           ctx.beginPath();
           ctx.moveTo(centerX, centerY);
@@ -223,24 +238,24 @@ export default function AudioVisualizerPage() {
           ctx.stroke();
         }
       }
-      
+
       animationRef.current = requestAnimationFrame(animate);
     };
-    
+
     animate();
-    
+
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [visualStyle, hasUserInteracted]);
-  
+  }, [visualStyle, hasUserInteracted, isMicActive]);
+
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#0a0a0f]">
       <canvas ref={canvasRef} className="absolute inset-0" />
-      
+
       {/* Back Button */}
       <Link
         href="/experiences"
@@ -251,7 +266,7 @@ export default function AudioVisualizerPage() {
         </svg>
         Back
       </Link>
-      
+
       {/* Controls */}
       <motion.div
         className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-wrap justify-center gap-2 p-4 bg-black/50 backdrop-blur-sm rounded-2xl"
@@ -259,39 +274,42 @@ export default function AudioVisualizerPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <button
+          onClick={toggleMicrophone}
+          className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 ${isMicActive ? 'bg-red-500/80 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
+        >
+          {isMicActive ? '🎤 Mic On' : '🎤 Mic Off'}
+        </button>
+        <button
           onClick={() => setVisualStyle('bars')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            visualStyle === 'bars' ? 'bg-[#a8e6cf] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
+          className={`px-4 py-2 rounded-xl font-medium transition-all ${visualStyle === 'bars' ? 'bg-[#a8e6cf] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
         >
           📊 Bars
         </button>
         <button
           onClick={() => setVisualStyle('circle')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            visualStyle === 'circle' ? 'bg-[#ffb3ba] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
+          className={`px-4 py-2 rounded-xl font-medium transition-all ${visualStyle === 'circle' ? 'bg-[#ffb3ba] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
         >
           ⭕ Circle
         </button>
         <button
           onClick={() => setVisualStyle('wave')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            visualStyle === 'wave' ? 'bg-[#bae1ff] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
+          className={`px-4 py-2 rounded-xl font-medium transition-all ${visualStyle === 'wave' ? 'bg-[#bae1ff] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
         >
           🌊 Wave
         </button>
         <button
           onClick={() => setVisualStyle('particles')}
-          className={`px-4 py-2 rounded-xl font-medium transition-all ${
-            visualStyle === 'particles' ? 'bg-[#bab3ff] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
+          className={`px-4 py-2 rounded-xl font-medium transition-all ${visualStyle === 'particles' ? 'bg-[#bab3ff] text-[#0a0a0f]' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
         >
           ✨ Particles
         </button>
       </motion.div>
-      
+
       {/* Title */}
       <motion.div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none"
