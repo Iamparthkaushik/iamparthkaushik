@@ -65,6 +65,16 @@ const games: GameCard[] = [
     gridClass: 'col-span-2 row-span-1',
     difficulty: 'Medium',
   },
+  {
+    id: 'slow-roads',
+    title: 'Slow Roads',
+    description: 'Relax and drive through beautiful changing landscapes.',
+    icon: '🚗',
+    gradient: 'from-[#bab3ff] via-[#9b8cff] to-[#7c6aff]',
+    href: '/games/slow-roads',
+    gridClass: 'col-span-2 row-span-2',
+    difficulty: 'Easy',
+  },
 ];
 
 const difficultyColors: Record<string, string> = {
